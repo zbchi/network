@@ -14,7 +14,7 @@ int main()
     // 绑定ip和端口
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;         // ipv4
-    addr.sin_port = htons(8989);       // 端口网络字节序
+    addr.sin_port = htons(9999);       // 端口网络字节序
     addr.sin_addr.s_addr = INADDR_ANY; // 绑定所有IP
     int ret = bind(lfd, (struct sockaddr *)&addr, sizeof(addr));
     if (ret == -1)
