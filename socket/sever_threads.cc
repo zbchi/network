@@ -6,15 +6,24 @@
 using namespace std;
 
 int fds[1024];
-
+struct sockinfo
+{
+    int fd;
+    struct sockaddr_in addr;
+};
+struct sockinfo fdss[1024];
 void *working(void *arg)
 {
-    int cfd = *(int *)arg;
+    struct sockinfo *info = (struct sockinfo *)arg;
     char buf[1024];
+
+    char myip[24];
+    cout << "客户端IP:" << inet_ntop(AF_INET, &info->addr.sin_addr.s_addr, myip, sizeof(myip)) << "端口:" << ntohs(info->addr.sin_port) << endl;
+
     while (1)
     {
         memset(buf, 0, sizeof(buf));
-        int len = read(cfd, buf, sizeof(buf));
+        int len = read(info->fd, buf, sizeof(buf));
         if (len == 0)
         {
             cout << "客户端断开连接" << endl;
@@ -28,11 +37,11 @@ void *working(void *arg)
         else
         {
             cout << "客户端say:" << buf << endl;
-            write(cfd, buf, len);
+            write(info->fd, buf, len);
         }
     }
-    close(cfd);
-    *(int *)arg = -1;
+    close(info->fd);
+    info->fd = -1;
 
     return NULL;
 }
@@ -48,6 +57,10 @@ int main()
     addr.sin_port = htons(8989);
     addr.sin_addr.s_addr = INADDR_ANY;
 
+    // 设置端口复用
+    int optval = 1;
+    setsockopt(lfd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+
     int ret = bind(lfd, (struct sockaddr *)&addr, sizeof(addr));
     if (ret == -1)
         perror("bind");
@@ -59,7 +72,11 @@ int main()
     struct sockaddr_in cliaddr;
     socklen_t clilen = sizeof(cliaddr);
 
-    memset(fds, -1, sizeof(fds));
+    // memset(fds, -1, sizeof(fds));
+    for (int i = 0; i < sizeof(fdss) / sizeof(struct sockinfo); i++)
+    {
+        fdss[i].fd = -1;
+    }
 
     while (1)
     {
@@ -71,16 +88,15 @@ int main()
             perror("accept");
             continue;
         }
-        char myip[24];
-        cout << "客户端IP:" << inet_ntop(AF_INET, &cliaddr.sin_addr.s_addr, myip, sizeof(myip)) << "端口:" << ntohs(cliaddr.sin_port) << endl;
 
-        int *ptr = NULL;
-        for (int i = 0; i < sizeof(fds) / sizeof(int); i++)
+        struct sockinfo *ptr = NULL;
+        for (int i = 0; i < sizeof(fdss) / sizeof(struct sockinfo); i++)
         {
-            if (fds[i] == -1)
+            if (fdss[i].fd == -1)
             {
-                fds[i] = cfd;
-                ptr = &fds[i];
+                fdss[i].fd = cfd;
+                fdss[i].addr = cliaddr;
+                ptr = &fdss[i];
                 break;
             }
         }
